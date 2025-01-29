@@ -143,6 +143,9 @@ void *do_work(void *ptr)
 	mpz_set_str(n, "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 0);
 	mpz_set_str(half_n, "0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0", 0);
 	unsigned char signed_op[] = "\xa7""csigxVAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAdprev\xf6""dtypemplc_operationhservices\xa0""kalsoKnownAs\x81""kat://000004lrotationKeys\x81""x9did:key:zQ3shnemVPxSsadcoTuFmMW7YoETBAmM9UZoxn1vnpjD4yruesverificationMethods\xa0";
+	// ^ sig at offset 7, handle at offset 147, pubkey at offset 169
+
+	memcpy(&signed_op[169], args->pubkey, strlen(args->pubkey));
 
 	size_t prefixlen = strlen(args->prefix);
 
