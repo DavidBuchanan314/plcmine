@@ -1,6 +1,8 @@
 # plcmine
 Yet another vanity [did:plc](https://github.com/did-method-plc/did-method-plc) miner (GMP+OpenSSL on CPU, for now - might port to OpenCL one day)
 
+See also https://github.com/katietheqt/vanity-did-plc, which uses a slightly different mining strategy. I haven't benchmarked the two, but I believe plcmine should be marginally faster, and more secure since it doesn't involve publishing any ops with weak private keys - the signatures it generates are "real". The relatively simpler arithmetic used in the inner loop of plcmine should make it amenable to a GPU implementation if I get around to that.
+
 ## How fast does it go?
 
 ~56 million DIDs per second on my 3950x, using 32 threads.
