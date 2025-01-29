@@ -177,7 +177,7 @@ cython_debug/
 *.bin
 
 # compiled binary
-mine/mine
+native/mine
 
 # clutter
 signed_genesis_*.json
