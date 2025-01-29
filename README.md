@@ -13,9 +13,7 @@ See also https://github.com/katietheqt/vanity-did-plc, which uses a slightly dif
 
 We precompute the "first half" of secp256k1 ECDSA signing, for a few thousand different values of `k`, and store them in a lookup table. This part is implemented in pure python, and only takes a couple of seconds to run.
 
-Then, in optimised-ish native code, we generate a `did:plc` genesis operation, hash it (deriving `z`), and then compute the full ECDSA signature for each entry in our lookup table. Because of the precomputation, the only math required in the inner loop is a single 256-bit addition followed by a 256-bit modular multiplication. We compute the resulting base32 `did:plc` string (which involves SHA256 hashing the signed genesis operation), and print it out if it matches the prefix we're searching for.
-
-Note to self: we can rearrange things so the multiplication happens before the addition, might help with carry logic when moving to a GPU impl.
+Then, in optimised-ish native code, we generate a `did:plc` genesis operation, hash it (deriving `z`), and then compute the full ECDSA signature for each entry in our lookup table. Because of the precomputation, the only math required in the inner loop is a single 256-bit multiplication followed by a 256-bit addition (both modulo `n`). We compute the resulting base32 `did:plc` string (which involves SHA256 hashing the signed genesis operation), and print it out if it matches the prefix we're searching for.
 
 So the speed of the inner loop mostly comes down to:
 

@@ -117,7 +117,7 @@ static void bytes_to_b32_multibase(uint8_t *resbuf, const uint8_t *data, size_t 
 }
 
 uint8_t (*precomputed)[3][32];
-mpz_t *rDa;
+mpz_t *k_inv_rDa;
 mpz_t *k_inv;
 
 pthread_mutex_t stdout_mutex;
@@ -165,9 +165,9 @@ void *do_work(void *ptr)
 		mpz_import(z, 32, 1, 1, 1, 0, hash);
 
 		for (size_t j=0; j<args->num_precomputed_rows; j++) {
-			// s = (k_inv[j] * (z + rDa[j]))
-			mpz_add(s, z, rDa[j]);
-			mpz_mul(s, s, k_inv[j]);
+			// s = ((z * k_inv[j]) + k_inv_rDa[j])
+			mpz_mul(s, z, k_inv[j]);
+			mpz_add(s, s, k_inv_rDa[j]);
 			mpz_mod(s, s, n); // there's almost certainly a faster way of doing the modmul here
 
 			// low-s
@@ -225,12 +225,12 @@ int main(int argc, char *argv[])
 	assert(fread(precomputed, fsize, 1, f) == 1);
 	fclose(f);
 
-	rDa = calloc(num_precomputed_rows, sizeof(*rDa));
+	k_inv_rDa = calloc(num_precomputed_rows, sizeof(*k_inv_rDa));
 	k_inv = calloc(num_precomputed_rows, sizeof(*k_inv));
 	for (size_t i=0; i<num_precomputed_rows; i++) {
-		mpz_init(rDa[i]);
+		mpz_init(k_inv_rDa[i]);
 		mpz_init(k_inv[i]);
-		mpz_import(rDa[i], 32, 1, 1, 1, 0, precomputed[i][1]);
+		mpz_import(k_inv_rDa[i], 32, 1, 1, 1, 0, precomputed[i][1]);
 		mpz_import(k_inv[i], 32, 1, 1, 1, 0, precomputed[i][2]);
 	}
 
