@@ -30,3 +30,7 @@ Finally, the "postcompute" python script takes a line of output from the miner a
 ## How do I use it?
 
 TODO (tl;dr keygen, precompute, mine, postcompute)
+
+```sh
+openssl ecparam -name secp256k1 -genkey -noout -out privkey.pem
+```

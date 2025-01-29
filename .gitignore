@@ -169,3 +169,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# key material!!!
+*.pem
+
+# key can be derived from the LUT!
+*.bin
+
+# compiled binary
+mine/mine
+
+# clutter
+signed_genesis_*.json
