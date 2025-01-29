@@ -1,12 +1,18 @@
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
 import base58
 
 MULTICODEC_PUBKEY_PREFIX = {
 	ec.SECP256K1: b"\xe7\x01",  # varint(0xe7)
 	ec.SECP256R1: b"\x80\x24",  # varint(0x1200)
 }
+
+DETERMINISTIC_ECDSA_SHA256 = ec.ECDSA(
+	hashes.SHA256(), deterministic_signing=True
+)
 
 def load_privkey(path: str) -> ec.EllipticCurvePrivateKey:
 	with open(path, "rb") as keyfile:

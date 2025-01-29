@@ -29,8 +29,38 @@ Finally, the "postcompute" python script takes a line of output from the miner a
 
 ## How do I use it?
 
-TODO (tl;dr keygen, precompute, mine, postcompute)
+tl;dr keygen, precompute, mine, postcompute
 
 ```sh
+# compile
+cd ./native/
+make
+cd ../
+
+# keygen
 openssl ecparam -name secp256k1 -genkey -noout -out privkey.pem
+
+# precompute
+python3 native_precompute.py
+# example output:
+# precomputed tables for DID pubkey:
+# did:key:zQ3shiRNWQ9vbuRcDoNPjhVTe92r1sEe9MWyvjkLJCNgoSydq
+
+# mine
+$ ./native/mine 8 precomputed.bin 'did:key:zQ3shiRNWQ9vbuRcDoNPjhVTe92r1sEe9MWyvjkLJCNgoSydq' 'hello'
+imported 100000 rows, running on 8 threads
+hellonh6tnqquf4ygt5zueh6 YAAAAY 0x65d4e0b1e7573f384bcb401e3c1fa914e26fdeb9c9a9c11b7215475b0abcdf1b
+helloggijh7mpx5oeqhedymo oAAAAy 0x58cbc33d23b94e45bd3682a645c829c8e9229f7170d58f219e1642b367a8b876
+helloe4b2nvugmjeqva6ek7n QAAADz 0x448ba85adaa53dd88ba5b58d2bd6af830e0f60a618b46b8abbaf435f03e3edb
+hello3rh2nclstbeukh4sebh YAAAEL 0x5e0c50a735bd2e990df0797e5507778ef0283680f009f7f9e6454ae7bca6d6cf
+...
+^C
+
+# select the one you want
+python3 native_postcompute.py helloggijh7mpx5oeqhedymo oAAAAy 0x58cbc33d23b94e45bd3682a645c829c8e9229f7170d58f219e1642b367a8b876
+# example output:
+# your signed genesis op is at 'signed_genesis_helloggijh7mpx5oeqhedymo.json' and ready to be published
+
+# submit to plc.directory
+curl --json @signed_genesis_helloggijh7mpx5oeqhedymo.json "https://plc.directory/did:plc:helloggijh7mpx5oeqhedymo"
 ```

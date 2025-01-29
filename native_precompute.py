@@ -1,6 +1,6 @@
 import secrets
-import secp256k1
 
+import secp256k1
 import util
 
 def precompute_r_rDa_kinv(private_scalar, count=100_000):
