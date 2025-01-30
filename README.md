@@ -9,7 +9,7 @@ See also https://github.com/katietheqt/vanity-did-plc, which uses a slightly dif
 
 ~56 million DIDs per second on my 3950x, using 32 threads.
 
-(Edit: `mine_nogmp` now goes at 87m/sec, using optimized bigint routines. More optimizations pending!)
+(Edit: `mine_nogmp` now goes at 93m/sec, using optimized bigint routines. More optimizations pending!)
 
 ## How does it work?
 

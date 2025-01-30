@@ -23,6 +23,7 @@ struct work_args {
 	uint64_t range_start;
 	uint64_t range_end;
 	char *prefix;
+	uint8_t firstbyte;
 };
 
 void *do_work(void *ptr)
@@ -70,22 +71,23 @@ void *do_work(void *ptr)
 			SHA256_Update(&sha256, signed_op, sizeof(signed_op)-1);
 			SHA256_Final(hash, &sha256);
 
-			// it'd be cheaper to comare the hash bytes rather than b32, but I'm lazy
-			unsigned char did[24+1];
-			bytes_to_b32_multibase(did, hash, 5); // generates 8 bytes of base32
-			if (strncmp((char*)did, args->prefix, prefixlen) == 0) {
-				// defer the full b32 until now because it's kinda slow
-				bytes_to_b32_multibase(did, hash, 15);
-				did[24] = 0;
-				uint8_t kinvbuf[32];
-				bigint_pack(kinvbuf, k_inv[j]);
-				pthread_mutex_lock(&stdout_mutex);
-				printf("%s %s 0x", did, handle);
-				for (int k=0; k<32; k++) {
-					printf("%02x", kinvbuf[k]);
+			if (hash[0] == args->firstbyte) {
+				unsigned char did[24+1];
+				bytes_to_b32_multibase(did, hash, 5); // generates 8 bytes of base32
+				if (strncmp((char*)did, args->prefix, prefixlen) == 0) {
+					// defer the full b32 until now because it's kinda slow
+					bytes_to_b32_multibase(did, hash, 15);
+					did[24] = 0;
+					uint8_t kinvbuf[32];
+					bigint_pack(kinvbuf, k_inv[j]);
+					pthread_mutex_lock(&stdout_mutex);
+					printf("%s %s 0x", did, handle);
+					for (int k=0; k<32; k++) {
+						printf("%02x", kinvbuf[k]);
+					}
+					printf("\n");
+					pthread_mutex_unlock(&stdout_mutex);
 				}
-				printf("\n");
-				pthread_mutex_unlock(&stdout_mutex);
 			}
 		}
 	}
@@ -98,6 +100,17 @@ int main(int argc, char *argv[])
 		printf("USAGE: %s num_threads precomputed.bin did:key:publickey prefix\n", argv[0]);
 		return -1;
 	}
+
+	char *prefix_str = argv[4];
+	if (strlen(prefix_str) < 2) {
+		printf("prefix should be at least 2 chars long...\n");
+		return -1;
+	}
+
+	/* figure out the first byte that the prefix corresponds to */
+	uint8_t firstbyte = \
+		((strchr((char*)B32_CHARSET, prefix_str[0])-(char*)B32_CHARSET) << 3) |
+		((strchr((char*)B32_CHARSET, prefix_str[1])-(char*)B32_CHARSET) >> 2);
 
 	/* load the precomputed data */
 	FILE *f = fopen(argv[2], "rb");
@@ -137,7 +150,8 @@ int main(int argc, char *argv[])
 		argses[i].pubkey = argv[3];
 		argses[i].range_start = total_iters*i/num_threads;
 		argses[i].range_end = total_iters*(i+1)/num_threads;
-		argses[i].prefix = argv[4];
+		argses[i].prefix = prefix_str;
+		argses[i].firstbyte = firstbyte;
 		pthread_create(&threads[i], NULL, *do_work, &argses[i]);
 	}
 
