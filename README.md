@@ -9,7 +9,7 @@ See also https://github.com/katietheqt/vanity-did-plc, which uses a slightly dif
 
 ~56 million DIDs per second on my 3950x, using 32 threads.
 
-(Edit: `mine_nogmp` now goes at 99M/sec, using optimized bigint routines. More optimizations pending!)
+(Edit: `mine_nogmp` now goes at 99M/sec, using optimized bigint routines. Build it with `make mine_nogmp` - I'll make it the default in the future.)
 
 ## How does it work?
 
@@ -68,3 +68,6 @@ python3 native_postcompute.py helloggijh7mpx5oeqhedymo oAAAAy 0x58cbc33d23b94e45
 # submit to plc.directory
 curl --json @signed_genesis_helloggijh7mpx5oeqhedymo.json "https://plc.directory/did:plc:helloggijh7mpx5oeqhedymo"
 ```
+
+> [!CAUTION]
+> The log lines output from the `mine` step are cryptographically sensitive. Do not share them! Same goes for the `precomputed.bin` file.
