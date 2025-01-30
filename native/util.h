@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
+#include <time.h>
 
 static const uint8_t B64_CHARSET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -109,4 +110,10 @@ static void bytes_to_b32_multibase(uint8_t *resbuf, const uint8_t *data, size_t 
 	default:
 		assert(0); // unreachable
 	}
+}
+
+double get_current_timestamp() {
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ts.tv_sec + ts.tv_nsec / 1e9;
 }

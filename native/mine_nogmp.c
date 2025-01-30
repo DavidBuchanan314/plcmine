@@ -5,11 +5,13 @@
 #include <openssl/sha.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "util.h"
 #include "bigint.h"
 
 uint8_t (*precomputed)[3][32];
+uint8_t (*r_b64)[40]; // first 30 bytes of r, base64-encoded
 uint32_t (*k_inv_rDa)[10];
 uint32_t (*k_inv)[10];
 
@@ -58,9 +60,10 @@ void *do_work(void *ptr)
 
 			// TODO: base64 most of the first half of the sig in the outer loop
 			uint8_t raw_sig[64];
-			memcpy(raw_sig, precomputed[j][0], 32);
+			memcpy(&raw_sig[30], &precomputed[j][0][30], 2); // we only need the tail end of r, we precomputed the rest
 			bigint_pack(&raw_sig[32], s);
-			bytes_to_b64_string_nopad(&signed_op[7], raw_sig, 64);
+			memcpy(&signed_op[7], r_b64[j], 40);
+			bytes_to_b64_string_nopad(&signed_op[7+40], &raw_sig[30], 34);
 			//printf("%s\n", signed_op);
 
 			SHA256_Init(&sha256);
@@ -108,9 +111,11 @@ int main(int argc, char *argv[])
 	assert(fread(precomputed, fsize, 1, f) == 1);
 	fclose(f);
 
+	r_b64 = calloc(num_precomputed_rows, sizeof(*r_b64));
 	k_inv_rDa = calloc(num_precomputed_rows, sizeof(*k_inv_rDa));
 	k_inv = calloc(num_precomputed_rows, sizeof(*k_inv));
 	for (size_t i=0; i<num_precomputed_rows; i++) {
+		bytes_to_b64_string_nopad(r_b64[i], precomputed[i][0], 30);
 		bigint_unpack(k_inv_rDa[i], precomputed[i][1]);
 		bigint_unpack(k_inv[i], precomputed[i][2]);
 	}
@@ -121,7 +126,12 @@ int main(int argc, char *argv[])
 
 	fprintf(stderr, "imported %lu rows, running on %d threads\n", num_precomputed_rows, num_threads);
 
+#ifdef BENCHMARK
+	uint64_t total_iters = 1000;
+	double start = get_current_timestamp();
+#else
 	uint64_t total_iters = 0x1000000000L; // run ~forever (hit ctrl+c when you're done)
+#endif
 	for (int i=0; i<num_threads; i++) {
 		argses[i].num_precomputed_rows = num_precomputed_rows;
 		argses[i].pubkey = argv[3];
@@ -134,4 +144,11 @@ int main(int argc, char *argv[])
 	for (int i=0; i<num_threads; i++) {
 		pthread_join(threads[i], NULL);
 	}
+#ifdef BENCHMARK
+	double duration = get_current_timestamp() - start;
+	uint64_t num_dids = total_iters * num_precomputed_rows;
+	fprintf(stderr, "\nMined %lu DIDs in %.3lf seconds\n", num_dids, duration);
+	double mdids = (double)num_dids/1e6/duration;
+	fprintf(stderr, "%.1lfM/sec\n", mdids);
+#endif
 }
