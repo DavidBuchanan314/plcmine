@@ -38,19 +38,16 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10], const uint32_t b[10]
 		}
 	}
 
-	// partial carry
-	for (int i=9; i<19; i++) {
+	// partial carry + extract high-half
+	tmp[9+1] += tmp[9]>>26;
+	tmp[9] &= (1<<26)-1;
+	for (int i=10; i<19; i++) {
 		tmp[i+1] += tmp[i]>>26;
-		tmp[i] &= (1<<26)-1;
-	}
-
-	// partial reduction (TODO: roll this into the previous loop?)
-	for (int i=10; i<20; i++) {
-		tmp_hi[i-10] = tmp[i]<<4;
+		tmp_hi[i-10] = (tmp[i] & ((1<<26)-1))<<4;
 		tmp[i] = 0;
 	}
-	tmp_hi[0] += tmp[9]>>22;
-	tmp[9] &= (1<<22)-1;
+	tmp_hi[19-10] = tmp[19]<<4;
+	// reduction
 	for (int i=0; i<10; i++) {
 		for (int j=0; j<5; j++) {
 			tmp[i+j] += (uint64_t)tmp_hi[i] * (uint64_t)C[j];
@@ -64,25 +61,16 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10], const uint32_t b[10]
 	printf("]\n");*/
 
 
-	// partial carry
-	for (int i=9; i<14; i++) {
+	// partial carry + extract high-half
+	tmp[9+1] += tmp[9]>>26;
+	tmp[9] &= (1<<26)-1;
+	for (int i=10; i<14; i++) {
 		tmp[i+1] += tmp[i]>>26;
-		tmp[i] &= (1<<26)-1;
-	}
-
-	/*printf("second carry\n[");
-	for (int i=0; i<20; i++) {
-		printf("%llu, ", tmp1[i]);
-	}
-	printf("]\n");*/
-
-	// partial reduction, take 2
-	for (int i=10; i<15; i++) {
-		tmp_hi[i-10] = tmp[i]<<4;
+		tmp_hi[i-10] = (tmp[i] & ((1<<26)-1))<<4;
 		tmp[i] = 0;
 	}
-	tmp_hi[0] += tmp[9]>>22;
-	tmp[9] &= (1<<22)-1;
+	tmp_hi[14-10] = tmp[14]<<4;
+	// reduction
 	for (int i=0; i<5; i++) {
 		for (int j=0; j<5; j++) {
 			tmp[i+j] += (uint64_t)tmp_hi[i] * (uint64_t)C[j];
@@ -121,8 +109,8 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10], const uint32_t b[10]
 
 	// final reduction
 	tmp_hi[0] = (tmp[9]>>22) + (tmp[10]<<4);
-	tmp[10] = 0;
-	tmp[9] &= (1<<22)-1;
+	//tmp[10] = 0;
+	//tmp[9] &= (1<<22)-1;
 	for (int i=0; i<1; i++) {
 		for (int j=0; j<5; j++) {
 			tmp[i+j] += (uint64_t)tmp_hi[i] * (uint64_t)C[j];
