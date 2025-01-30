@@ -106,6 +106,10 @@ int main(int argc, char *argv[])
 		printf("prefix should be at least 2 chars long...\n");
 		return -1;
 	}
+	if (strlen(prefix_str) > 8) {
+		printf("prefixes longer than 8 chars are not currently supported. Use grep to filter the output?\n");
+		return -1;
+	}
 
 	/* figure out the first byte that the prefix corresponds to */
 	uint8_t firstbyte = \
