@@ -178,6 +178,7 @@ cython_debug/
 
 # compiled binary
 native/mine
+native/mine_nogmp
 
 # clutter
 signed_genesis_*.json
