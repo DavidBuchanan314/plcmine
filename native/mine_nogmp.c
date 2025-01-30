@@ -101,7 +101,15 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	int num_threads = atoi(argv[1]);
+	char *precomputed_path = argv[2];
+	char *did_pubkey = argv[3];
 	char *prefix_str = argv[4];
+
+	if (strlen(did_pubkey) != 57) {
+		printf("invalid pubkey length (you need the did:key: prefix)\n");
+		return -1;
+	}
 	if (strlen(prefix_str) < 2) {
 		printf("prefix should be at least 2 chars long...\n");
 		return -1;
@@ -111,13 +119,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	/* figure out the first byte that the prefix corresponds to */
-	uint8_t firstbyte = \
-		((strchr((char*)B32_CHARSET, prefix_str[0])-(char*)B32_CHARSET) << 3) |
-		((strchr((char*)B32_CHARSET, prefix_str[1])-(char*)B32_CHARSET) >> 2);
-
 	/* load the precomputed data */
-	FILE *f = fopen(argv[2], "rb");
+	FILE *f = fopen(precomputed_path, "rb");
 	assert(f != NULL);
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
@@ -137,7 +140,11 @@ int main(int argc, char *argv[])
 		bigint_unpack(k_inv[i], precomputed[i][2]);
 	}
 
-	int num_threads = atoi(argv[1]);
+	/* figure out the first byte that the prefix corresponds to */
+	uint8_t firstbyte = \
+		((strchr((char*)B32_CHARSET, prefix_str[0])-(char*)B32_CHARSET) << 3) |
+		((strchr((char*)B32_CHARSET, prefix_str[1])-(char*)B32_CHARSET) >> 2);
+
 	pthread_t *threads = calloc(num_threads, sizeof(*threads));
 	struct work_args *argses = calloc(num_threads, sizeof(*argses));
 
