@@ -9,6 +9,8 @@ See also https://github.com/katietheqt/vanity-did-plc, which uses a slightly dif
 
 ~56 million DIDs per second on my 3950x, using 32 threads.
 
+(Edit: `mine_nogmp` now goes at 87m/sec, using optimized bigint routines. More optimizations pending!)
+
 ## How does it work?
 
 We precompute the "first half" of secp256k1 ECDSA signing, for a few thousand different values of `k`, and store them in a lookup table. This part is implemented in pure python, and only takes a couple of seconds to run.
