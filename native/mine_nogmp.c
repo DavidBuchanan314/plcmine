@@ -74,9 +74,14 @@ void *do_work(void *ptr)
 				// defer the full b32 until now because it's kinda slow
 				bytes_to_b32_multibase(did, hash, 15);
 				did[24] = 0;
+				uint8_t kinvbuf[32];
+				bigint_pack(kinvbuf, k_inv[j]);
 				pthread_mutex_lock(&stdout_mutex);
-				printf("%s TODO\n", did);
-				//gmp_printf("%s %s %#Zx\n", did, handle, k_inv[j]);
+				printf("%s %s 0x", did, handle);
+				for (int k=0; k<32; k++) {
+					printf("%02x", kinvbuf[k]);
+				}
+				printf("\n");
 				pthread_mutex_unlock(&stdout_mutex);
 			}
 		}
