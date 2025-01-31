@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "util.h"
 #include "bigint.h"
@@ -16,6 +17,24 @@ uint32_t (*k_inv_rDa)[10];
 uint32_t (*k_inv)[10];
 
 pthread_mutex_t stdout_mutex;
+pthread_mutex_t stats_mutex;
+
+uint64_t total_plcs = 0;
+uint64_t total_found = 0;
+double start_time = 0.0;
+
+void print_stats(void)
+{
+	pthread_mutex_lock(&stats_mutex);
+	double duration = get_current_timestamp() - start_time;
+	double rate = (double)total_plcs/1e6/duration;
+	fprintf(
+		stderr,
+		"  Stats: %lu PLCs checked in %.3lf seconds (%.1lfM/s avg) Found: %lu\r",
+		total_plcs, duration, rate, total_found
+	);
+	pthread_mutex_unlock(&stats_mutex);
+}
 
 struct work_args {
 	size_t num_precomputed_rows;
@@ -87,12 +106,33 @@ void *do_work(void *ptr)
 					}
 					printf("\n");
 					fflush(stdout);
+					print_stats(); // redraw stats line
 					pthread_mutex_unlock(&stdout_mutex);
+
+					pthread_mutex_lock(&stats_mutex);
+					total_found++;
+					pthread_mutex_unlock(&stats_mutex);
 				}
 			}
 		}
+		pthread_mutex_lock(&stats_mutex);
+		total_plcs += args->num_precomputed_rows;
+		pthread_mutex_unlock(&stats_mutex);
 	}
 	return NULL;
+}
+
+void *stats_loop(void *ptr)
+{
+	(void)(ptr); // unused
+
+	while (1)
+	{
+		sleep(1);
+		pthread_mutex_lock(&stdout_mutex);
+		print_stats();
+		pthread_mutex_unlock(&stdout_mutex);
+	}
 }
 
 int main(int argc, char *argv[])
@@ -151,10 +191,14 @@ int main(int argc, char *argv[])
 
 	fprintf(stderr, "imported %lu rows, running on %d threads\n", num_precomputed_rows, num_threads);
 
+	start_time = get_current_timestamp();
+
 #ifdef BENCHMARK
 	uint64_t total_iters = 1000;
-	double start = get_current_timestamp();
 #else
+	pthread_t stats_thread;
+	pthread_create(&stats_thread, NULL, *stats_loop, NULL);
+
 	uint64_t total_iters = 0x1000000000L; // run ~forever (hit ctrl+c when you're done)
 #endif
 	for (int i=0; i<num_threads; i++) {
@@ -170,11 +214,10 @@ int main(int argc, char *argv[])
 	for (int i=0; i<num_threads; i++) {
 		pthread_join(threads[i], NULL);
 	}
-#ifdef BENCHMARK
-	double duration = get_current_timestamp() - start;
-	uint64_t num_dids = total_iters * num_precomputed_rows;
-	fprintf(stderr, "\nMined %lu DIDs in %.3lf seconds\n", num_dids, duration);
-	double mdids = (double)num_dids/1e6/duration;
-	fprintf(stderr, "%.1lfM/sec\n", mdids);
+#ifndef BENCHMARK
+	pthread_join(stats_thread, NULL);
 #endif
+
+	print_stats();
+	fprintf(stderr, "\n");
 }
