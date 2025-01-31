@@ -92,6 +92,7 @@ void *do_work(void *ptr)
 				did[24] = 0;
 				pthread_mutex_lock(&stdout_mutex);
 				gmp_printf("%s %s %#Zx\n", did, handle, k_inv[j]);
+				fflush(stdout);
 				pthread_mutex_unlock(&stdout_mutex);
 			}
 		}

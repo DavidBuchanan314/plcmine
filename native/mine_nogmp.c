@@ -86,6 +86,7 @@ void *do_work(void *ptr)
 						printf("%02x", kinvbuf[k]);
 					}
 					printf("\n");
+					fflush(stdout);
 					pthread_mutex_unlock(&stdout_mutex);
 				}
 			}
