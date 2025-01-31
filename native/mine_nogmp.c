@@ -100,7 +100,14 @@ void *do_work(void *ptr)
 					did[24] = 0;
 					uint8_t kinvbuf[32];
 					bigint_pack(kinvbuf, k_inv[j]);
+
+					pthread_mutex_lock(&stats_mutex);
+					total_found++;
+					pthread_mutex_unlock(&stats_mutex);
+
+
 					pthread_mutex_lock(&stdout_mutex);
+
 					printf("%s %s 0x", did, handle);
 					for (int k=0; k<32; k++) {
 						printf("%02x", kinvbuf[k]);
@@ -108,11 +115,8 @@ void *do_work(void *ptr)
 					printf("\n");
 					fflush(stdout);
 					print_stats(); // redraw stats line
-					pthread_mutex_unlock(&stdout_mutex);
 
-					pthread_mutex_lock(&stats_mutex);
-					total_found++;
-					pthread_mutex_unlock(&stats_mutex);
+					pthread_mutex_unlock(&stdout_mutex);
 				}
 			}
 		}
