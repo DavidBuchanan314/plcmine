@@ -3,9 +3,12 @@ import secrets
 import secp256k1
 import util
 
-def precompute_r_rDa_kinv(private_scalar, count=100_000):
+def precompute_r_rDa_kinv(private_scalar, count=100_000, k=None):
 	table = []
-	k = secrets.randbelow(secp256k1.n)
+	if k is None:
+		k = secrets.randbelow(secp256k1.n)
+	else:
+		print("WARNING: running with hardcoded k constant, should only be used during testing")
 	R = secp256k1.G.scalar_mul(k)
 	k_inv = pow(k, -1, secp256k1.n)
 	div2 = pow(2, -1, secp256k1.n)
@@ -18,13 +21,25 @@ def precompute_r_rDa_kinv(private_scalar, count=100_000):
 		table.append((r.to_bytes(32), k_inv_rDa, k_inv))
 	return table
 
-privkey = util.load_privkey("privkey.pem")
-private_scalar = privkey.private_numbers().private_value
-r_kinvrDa_kinv = precompute_r_rDa_kinv(private_scalar)
+def main(testmode: bool):
+	privkey = util.load_privkey("privkey.pem")
+	private_scalar = privkey.private_numbers().private_value
 
-with open("precomputed.bin", "wb") as outfile:
-	for r_bytes, k_inv_rDa, k_inv in r_kinvrDa_kinv:
-		outfile.write(r_bytes + k_inv_rDa.to_bytes(32) + k_inv.to_bytes(32))
+	if testmode:
+		print("WARNING: RUNNING IN TEST MODE - THIS IS CRYPTOGRAPHICALLY INSECURE")
+		#      ^(because k is fixed, for determinism)
+		r_kinvrDa_kinv = precompute_r_rDa_kinv(private_scalar, count=10_000, k=12345)
+	else:
+		r_kinvrDa_kinv = precompute_r_rDa_kinv(private_scalar)
 
-print("precomputed tables for DID pubkey:")
-print(util.encode_pubkey_as_did_key(privkey.public_key()))
+	with open("precomputed.bin", "wb") as outfile:
+		for r_bytes, k_inv_rDa, k_inv in r_kinvrDa_kinv:
+			outfile.write(r_bytes + k_inv_rDa.to_bytes(32) + k_inv.to_bytes(32))
+
+	print("precomputed tables for DID pubkey:")
+	print(util.encode_pubkey_as_did_key(privkey.public_key()))
+
+if __name__ == "__main__":
+	import sys
+	testmode = sys.argv[-1] == "testmode"
+	main(testmode)
