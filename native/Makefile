@@ -1,6 +1,6 @@
 all: mine
 
-override CFLAGS += -O3 -Wall -Wextra -Wpedantic -Wno-deprecated-declarations
+override CFLAGS += -O3 -Wall -Wextra -Wpedantic -Wno-deprecated-declarations -Wno-format
 
 # make mine_nogmp CFLAGS=-DBENCHMARK
 

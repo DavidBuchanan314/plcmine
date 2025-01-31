@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+#include <locale.h>
 
 #include "util.h"
 #include "bigint.h"
@@ -30,7 +31,7 @@ void print_stats(void)
 	double rate = (double)total_plcs/1e6/duration;
 	fprintf(
 		stderr,
-		"  Stats: %lu PLCs checked in %.3lf seconds (%.1lfM/s avg) Found: %lu\r",
+		"  Stats: %'lu PLCs checked in %.3lf seconds (%.1lfM/s avg) Found: %lu\r",
 		total_plcs, duration, rate, total_found
 	);
 	pthread_mutex_unlock(&stats_mutex);
@@ -190,6 +191,8 @@ int main(int argc, char *argv[])
 	struct work_args *argses = calloc(num_threads, sizeof(*argses));
 
 	fprintf(stderr, "imported %lu rows, running on %d threads\n", num_precomputed_rows, num_threads);
+
+	setlocale(LC_NUMERIC, ""); // let the stats print with decimal separators
 
 	start_time = get_current_timestamp();
 
