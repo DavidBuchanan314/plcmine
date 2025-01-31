@@ -37,13 +37,13 @@ fi
 
 rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json # expected output path
 python3 native_postcompute.py abcdreosiqpcxwxszeh64qf5 AAAADz 0x4048de9209e53bfa9098deba95fc1948b0c5a341a3b0e1d89124c11124e5c471
-GENESIS_HASH=$(sort test_results.txt | sha256sum | cut -d " " -f1)
-rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json
+GENESIS_HASH=$(sha256sum signed_genesis_abcdreosiqpcxwxszeh64qf5.json | cut -d " " -f1)
+#rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json
 
 echo
 echo "Genesis hash: ${GENESIS_HASH}"
 
-if [ "$GENESIS_HASH" == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]; then
+if [ "$GENESIS_HASH" == "25e03279537d05ae3be9b80526d8efb0345c50a64ddd974d9ecdeb3de6ac6c3e" ]; then
 	echo PASS
 else
 	echo FAIL
