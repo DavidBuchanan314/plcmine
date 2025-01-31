@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -euo pipefail
+
 cd ./native/
 make -B mine_nogmp CFLAGS="-DBENCHMARK"
 cd ../
@@ -21,6 +23,7 @@ python3 native_precompute.py testmode
 
 rm -f precomputed.bin # prevent accidental reuse
 
+# we need to sort the result lines, because their order is nondeterministic due to multithreading
 RESULTS_HASH=$(sort test_results.txt | sha256sum | cut -d " " -f1)
 rm test_results.txt
 

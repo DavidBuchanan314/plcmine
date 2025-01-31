@@ -24,7 +24,7 @@ def main(expected_did: str, handle_tweak: str, k_inv: int):
 		"verificationMethods": {},
 	}
 	#print(cbrrr.encode_dag_cbor(genesis))
-	z = int.from_bytes(hashlib.sha256(cbrrr.encode_dag_cbor(genesis)).digest())
+	z = int.from_bytes(hashlib.sha256(cbrrr.encode_dag_cbor(genesis)).digest(), "big")
 
 	k = pow(k_inv, -1, secp256k1.n)
 	R = secp256k1.G.scalar_mul(k)
@@ -34,7 +34,7 @@ def main(expected_did: str, handle_tweak: str, k_inv: int):
 	if s > HALF_N:
 		s = secp256k1.n - s
 
-	raw_sig = r.to_bytes(32) + s.to_bytes(32)
+	raw_sig = r.to_bytes(32, "big") + s.to_bytes(32, "big")
 
 	genesis["sig"] = base64.urlsafe_b64encode(raw_sig).rstrip(b"=").decode()
 	signed_msg = cbrrr.encode_dag_cbor(genesis)
@@ -56,11 +56,11 @@ def main(expected_did: str, handle_tweak: str, k_inv: int):
 	raw_sig = base64.urlsafe_b64decode(signed_genesis.pop("sig") + "==")
 	pubkey.verify(
 		util.encode_dss_signature(
-			int.from_bytes(raw_sig[:32]),
-			int.from_bytes(raw_sig[32:])
+			int.from_bytes(raw_sig[:32], "big"),
+			int.from_bytes(raw_sig[32:], "big")
 		),
 		cbrrr.encode_dag_cbor(signed_genesis),
-		util.DETERMINISTIC_ECDSA_SHA256
+		util.ECDSA_SHA256
 	)
 
 	print(f"your signed genesis op is at {outpath!r} and ready to be published")

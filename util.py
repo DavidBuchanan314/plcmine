@@ -10,9 +10,7 @@ MULTICODEC_PUBKEY_PREFIX = {
 	ec.SECP256R1: b"\x80\x24",  # varint(0x1200)
 }
 
-DETERMINISTIC_ECDSA_SHA256 = ec.ECDSA(
-	hashes.SHA256(), deterministic_signing=True
-)
+ECDSA_SHA256 = ec.ECDSA(hashes.SHA256())
 
 def load_privkey(path: str) -> ec.EllipticCurvePrivateKey:
 	with open(path, "rb") as keyfile:

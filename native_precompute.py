@@ -18,7 +18,7 @@ def precompute_r_rDa_kinv(private_scalar, count=100_000, k=None):
 		r = R.x
 		rDa = (r * private_scalar) % secp256k1.n
 		k_inv_rDa = (k_inv * rDa) % secp256k1.n
-		table.append((r.to_bytes(32), k_inv_rDa, k_inv))
+		table.append((r.to_bytes(32, "big"), k_inv_rDa, k_inv))
 	return table
 
 def main(testmode: bool):
@@ -34,7 +34,7 @@ def main(testmode: bool):
 
 	with open("precomputed.bin", "wb") as outfile:
 		for r_bytes, k_inv_rDa, k_inv in r_kinvrDa_kinv:
-			outfile.write(r_bytes + k_inv_rDa.to_bytes(32) + k_inv.to_bytes(32))
+			outfile.write(r_bytes + k_inv_rDa.to_bytes(32, "big") + k_inv.to_bytes(32, "big"))
 
 	print("precomputed tables for DID pubkey:")
 	print(util.encode_pubkey_as_did_key(privkey.public_key()))
