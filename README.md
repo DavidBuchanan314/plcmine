@@ -36,9 +36,12 @@ Finally, the "postcompute" python script takes a line of output from the miner a
 tl;dr keygen, precompute, mine, postcompute
 
 ```sh
-# compile
+# install python deps
+python3 -m pip install -r requirements.txt
+
+# compile native miner
 cd ./native/
-make
+make mine_nogmp
 cd ../
 
 # keygen
@@ -51,7 +54,8 @@ python3 native_precompute.py
 # did:key:zQ3shiRNWQ9vbuRcDoNPjhVTe92r1sEe9MWyvjkLJCNgoSydq
 
 # mine
-$ ./native/mine 8 precomputed.bin 'did:key:zQ3shiRNWQ9vbuRcDoNPjhVTe92r1sEe9MWyvjkLJCNgoSydq' 'hello'
+# (tweak the number of threads to suit your hardware)
+$ ./native/mine_nogmp 8 precomputed.bin 'did:key:zQ3shiRNWQ9vbuRcDoNPjhVTe92r1sEe9MWyvjkLJCNgoSydq' 'hello'
 imported 100000 rows, running on 8 threads
 hellonh6tnqquf4ygt5zueh6 YAAAAY 0x65d4e0b1e7573f384bcb401e3c1fa914e26fdeb9c9a9c11b7215475b0abcdf1b
 helloggijh7mpx5oeqhedymo oAAAAy 0x58cbc33d23b94e45bd3682a645c829c8e9229f7170d58f219e1642b367a8b876
