@@ -38,7 +38,7 @@ fi
 rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json # expected output path
 python3 native_postcompute.py abcdreosiqpcxwxszeh64qf5 AAAADz 0x4048de9209e53bfa9098deba95fc1948b0c5a341a3b0e1d89124c11124e5c471
 GENESIS_HASH=$(sha256sum signed_genesis_abcdreosiqpcxwxszeh64qf5.json | cut -d " " -f1)
-#rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json
+rm -f signed_genesis_abcdreosiqpcxwxszeh64qf5.json
 
 echo
 echo "Genesis hash: ${GENESIS_HASH}"
