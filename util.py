@@ -19,6 +19,15 @@ def load_privkey(path: str) -> ec.EllipticCurvePrivateKey:
 			password=None
 		)
 
+def save_privkey(path: str, privkey: ec.EllipticCurvePrivateKey):
+	with open(path, "wb") as outfile:
+		pem = privkey.private_bytes(
+			encoding=serialization.Encoding.PEM,
+			format=serialization.PrivateFormat.PKCS8,
+			encryption_algorithm=serialization.NoEncryption(),
+		)
+		outfile.write(pem)
+
 def encode_pubkey_as_did_key(pubkey: ec.EllipticCurvePublicKey) -> str:
 	compressed_public_bytes = pubkey.public_bytes(
 		serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
