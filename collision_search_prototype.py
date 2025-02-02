@@ -135,14 +135,14 @@ def find_collision_point(start_a, start_b):
 	lookup2 = {}
 	point = start_a
 	while not is_distinguished(point):
-		point, prev = pollard_next(lut, point), point
-		lookup2[point] = prev
+		point, prev_a = pollard_next(lut, point), point
+		lookup2[point] = prev_a
 
 	point = start_b
 	while point not in lookup2:
-		point, prev = pollard_next(lut, point), point
+		point, prev_b = pollard_next(lut, point), point
 
-	return prev, lookup2[point]
+	return prev_b, lookup2[point]
 
 def do_collision_search(lut):
 	q = Queue(100000)
