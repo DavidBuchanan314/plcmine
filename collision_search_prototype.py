@@ -153,7 +153,7 @@ def do_collision_search(lut):
 
 	with tqdm(smoothing=0.1, unit_scale=1, unit="plc") as pbar:
 		total_iters = 0
-		expected_iterations_for_p90 = math.sqrt(math.log(1 - 0.9) * -((2.0**HASH_LENGTH_BITS)*2.0))
+		expected_iterations_for_p90 = math.sqrt(math.log(1 - 0.90) * -((2.0**HASH_LENGTH_BITS)*2.0))
 		start_time = time.time()
 		while True:
 			start, end, trail_length = q.get()
@@ -172,7 +172,7 @@ def do_collision_search(lut):
 			avg_rate = total_iters / (time.time() - start_time)
 			p90_eta = p90_remaining_iters / avg_rate
 
-			pbar.set_postfix_str(f"prob {success_probability_now*100:.2f}%, p90 progress {p90_progress*100:.2f}% ({tqdm.format_interval(p90_eta)} until p90)", refresh=False)
+			pbar.set_postfix_str(f"prob {success_probability_now*100:.2f}%, p90 progress {p90_progress*100:.2f}% ({'-' if p90_eta < 0 else ''}{tqdm.format_interval(abs(p90_eta))} until p90)", refresh=False)
 			pbar.update(trail_length)
 
 			if end in lookup:
