@@ -128,7 +128,23 @@ def trail_worker(q: Queue, lut):
 	while True:
 		q.put(build_trail(lut))
 
-def find_collision(lut):
+def find_collision_point(start_a, start_b):
+	# find the point where the two trails meet
+	# (naively - time/space tradeoffs are possible here)
+
+	lookup2 = {}
+	point = start_a
+	while not is_distinguished(point):
+		point, prev = pollard_next(lut, point), point
+		lookup2[point] = prev
+
+	point = start_b
+	while point not in lookup2:
+		point, prev = pollard_next(lut, point), point
+
+	return prev, lookup2[point]
+
+def do_collision_search(lut):
 	q = Queue(100000)
 	lookup = {}
 	workers = [Process(target=trail_worker, args=(q, lut)) for _ in range(NUM_WORKERS)]
@@ -153,29 +169,20 @@ def find_collision(lut):
 			pbar.update(trail_length)
 
 			if end in lookup:
+				h_a, h_b = find_collision_point(start, lookup[end])
+				if h_a[0] == h_b[0]:
+					print("\nyou got unlucky and both DIDs had the same privkey. continuing...")
+					continue
 				break
+
 			lookup[end] = start
 
 	print(f"Found colliding trails! ({len(lookup)} trails, {total_iters} iterations total)")
 
-
 	for w in workers: w.kill() # we're done with them now!
 
-	# find the point where the two trails meet
-	# (naively - time/space tradeoffs are possible here)
-	lookup2 = {}
-	point = lookup[end]
-	while not is_distinguished(point):
-		point, prev = pollard_next(lut, point), point
-		lookup2[point] = prev
+	assert(h_a[0] != h_b[0]) # same privkeys
 
-	point = start
-	while point not in lookup2:
-		point, prev = pollard_next(lut, point), point
-
-	h_a = prev
-	h_b = lookup2[point]
-	#assert(h_a[0] != h_b[0]) # same privkeys
 	msg_a = hash_to_msg(lut, h_a)
 	msg_b = hash_to_msg(lut, h_b)
 	print(f"sha256_{HASH_LENGTH_BITS}({msg_a}) => {sha256_trunc(msg_a).hex()}")
@@ -202,4 +209,4 @@ def find_collision(lut):
 
 if __name__ == "__main__":
 	lut = precompute_lut()
-	find_collision(lut)
+	do_collision_search(lut)
