@@ -6,6 +6,7 @@ from typing import Tuple
 import secrets
 import base64
 import json
+import math
 
 from tqdm import tqdm
 import cbrrr
@@ -117,9 +118,11 @@ def is_distinguished(h: bytes) -> bool:
 def build_trail(lut) -> Tuple[bytes, bytes]:
 	trail_start = sha256_trunc(os.urandom(16))
 	point = trail_start
+	trail_length = 0
 	while not is_distinguished(point):
 		point = pollard_next(lut, point)
-	return trail_start, point
+		trail_length += 1
+	return trail_start, point, trail_length
 
 def trail_worker(q: Queue, lut):
 	while True:
@@ -131,13 +134,30 @@ def find_collision(lut):
 	workers = [Process(target=trail_worker, args=(q, lut)) for _ in range(NUM_WORKERS)]
 	for w in workers: w.start() # start the workers
 
-	while True:
-		start, end = q.get()
-		if end in lookup:
-			#print(start, end)
-			print(f"Found colliding trails! ({len(lookup)} trails total)")
-			break
-		lookup[end] = start
+	with tqdm(smoothing=0.1, unit_scale=1, unit="plc") as pbar:
+		total_iters = 0
+		expected_iterations_for_p90 = math.sqrt(math.log(1 - 0.9) * -((2.0**HASH_LENGTH_BITS)*2.0))
+		while True:
+			start, end, trail_length = q.get()
+			# TODO: ignore if trail_length is too small?
+			total_iters += trail_length
+
+			# https://en.wikipedia.org/wiki/Birthday_problem#Approximations
+			success_probability_now = 1-math.e**-((total_iters**2.0)/((2.0**HASH_LENGTH_BITS)*2.0))
+
+			# What percentage of the way are we to reaching 90% odds of success?
+			# NOTE: this may be >100%!
+			p90_progress = total_iters / expected_iterations_for_p90
+
+			pbar.set_postfix_str(f"prob {success_probability_now*100:.2f}%, p90 progress {p90_progress*100:.2f}%", refresh=False)
+			pbar.update(trail_length)
+
+			if end in lookup:
+				break
+			lookup[end] = start
+
+	print(f"Found colliding trails! ({len(lookup)} trails, {total_iters} iterations total)")
+
 
 	for w in workers: w.kill() # we're done with them now!
 
