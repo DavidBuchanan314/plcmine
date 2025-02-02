@@ -196,6 +196,51 @@ static void bigint_unpack(uint32_t res[10], const uint8_t buf[32])
 	res[9] &= 0x003FFFFF; // 22-bit mask for last limb
 }
 
+// as above but each 32-bit word is endian-swapped (as in the output of raw sha256)
+static void bigint_unpack_le32(uint32_t res[10], const uint8_t buf[32])
+{
+	// thanks deepseek
+	res[0] = ((uint32_t)buf[28] <<  0) | ((uint32_t)buf[29] <<  8) |
+	         ((uint32_t)buf[30] << 16) | ((uint32_t)(buf[31] & 0x03) << 24);
+	res[0] &= 0x03FFFFFF; // 26-bit mask
+
+	res[1] = ((uint32_t)(buf[31] >> 2) <<  0) | ((uint32_t)buf[24] <<  6) |
+	         ((uint32_t)buf[25] << 14) | ((uint32_t)(buf[26] & 0x0F) << 22);
+	res[1] &= 0x03FFFFFF;
+
+	res[2] = ((uint32_t)(buf[26] >> 4) <<  0) | ((uint32_t)buf[27] <<  4) |
+	         ((uint32_t)buf[20] << 12) | ((uint32_t)(buf[21] & 0x3F) << 20);
+	res[2] &= 0x03FFFFFF;
+
+	res[3] = ((uint32_t)(buf[21] >> 6) <<  0) | ((uint32_t)buf[22] <<  2) |
+	         ((uint32_t)buf[23] << 10) | ((uint32_t)buf[16] << 18);
+	res[3] &= 0x03FFFFFF;
+
+	res[4] = ((uint32_t)buf[17] <<  0) | ((uint32_t)buf[18] <<  8) |
+	         ((uint32_t)buf[19] << 16) | ((uint32_t)(buf[12] & 0x03) << 24);
+	res[4] &= 0x03FFFFFF;
+
+	res[5] = ((uint32_t)(buf[12] >> 2) <<  0) | ((uint32_t)buf[13] <<  6) |
+	         ((uint32_t)buf[14] << 14) | ((uint32_t)(buf[15] & 0x0F) << 22);
+	res[5] &= 0x03FFFFFF;
+
+	res[6] = ((uint32_t)(buf[15] >> 4) <<  0) | ((uint32_t)buf[8] <<  4) |
+	         ((uint32_t)buf[9] << 12) | ((uint32_t)(buf[10]  & 0x3F) << 20);
+	res[6] &= 0x03FFFFFF;
+
+	res[7] = ((uint32_t)(buf[10]  >> 6) <<  0) | ((uint32_t)buf[11]  <<  2) |
+	         ((uint32_t)buf[4]  << 10) | ((uint32_t)buf[5]  << 18);
+	res[7] &= 0x03FFFFFF;
+
+	res[8] = ((uint32_t)buf[6] <<  0) | ((uint32_t)buf[7] <<  8) |
+	         ((uint32_t)buf[0] << 16) | ((uint32_t)(buf[1]  & 0x03) << 24);
+	res[8] &= 0x03FFFFFF;
+
+	res[9] = ((uint32_t)(buf[1] >> 2) <<  0) | ((uint32_t)buf[2] <<  6) |
+	         ((uint32_t)buf[3] << 14);
+	res[9] &= 0x003FFFFF; // 22-bit mask for last limb
+}
+
 // the reverse of the above
 static void bigint_pack(uint8_t resbuf[32], const uint32_t bigint[10])
 {

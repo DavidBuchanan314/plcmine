@@ -53,17 +53,17 @@ def precompute_lut(count=256):
 		r_bytes_suffix = r_bytes[30:]
 
 		signed_gensis_template = {
-			"sig": r_b64.decode() + "A"*46,
+			"sig": r_b64.decode() + "B"*46,
 			"prev": None,
 			"type": "plc_operation",
 			"services": {},
-			"alsoKnownAs": ["B"*TWEAKLEN],
+			"alsoKnownAs": ["A"*TWEAKLEN],
 			"rotationKeys": [pubkey_str],
 			"verificationMethods": {},
 		}
 		signed_gensis_template_bytes = cbrrr.encode_dag_cbor(signed_gensis_template)
-		template_a, template_remaining = signed_gensis_template_bytes.split(b"A"*46)
-		template_b, template_c = template_remaining.split(b"B"*TWEAKLEN)
+		template_a, template_remaining = signed_gensis_template_bytes.split(b"B"*46)
+		template_b, template_c = template_remaining.split(b"A"*TWEAKLEN)
 
 		k_inv = pow(k, -1, secp256k1.n)
 		rDa = (r * private_scalar) % secp256k1.n
@@ -116,7 +116,7 @@ def pollard_next(lut, h: bytes) -> bytes:
 def is_distinguished(h: bytes) -> bool:
 	return h.startswith(b"\x00\x00")
 
-def build_trail(lut) -> Tuple[bytes, bytes]:
+def build_trail_on_cpu(lut) -> Tuple[bytes, bytes]:
 	trail_start = sha256_trunc(os.urandom(16))
 	point = trail_start
 	trail_length = 0
@@ -125,9 +125,9 @@ def build_trail(lut) -> Tuple[bytes, bytes]:
 		trail_length += 1
 	return trail_start, point, trail_length
 
-def trail_worker(q: Queue, lut):
+def cpu_trail_worker(q: Queue, lut):
 	while True:
-		q.put(build_trail(lut))
+		q.put(build_trail_on_cpu(lut))
 
 def find_collision_point(start_a, start_b):
 	# find the point where the two trails meet
@@ -148,7 +148,7 @@ def find_collision_point(start_a, start_b):
 def do_collision_search(lut):
 	q = Queue(100000)
 	lookup = {}
-	workers = [Process(target=trail_worker, args=(q, lut)) for _ in range(NUM_WORKERS)]
+	workers = [Process(target=cpu_trail_worker, args=(q, lut)) for _ in range(NUM_WORKERS)]
 	for w in workers: w.start() # start the workers
 
 	with tqdm(smoothing=0.05, unit_scale=1, unit="plc") as pbar:
