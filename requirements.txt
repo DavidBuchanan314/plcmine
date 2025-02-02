@@ -1,3 +1,5 @@
 base58
 cryptography
 cbrrr
+tqdm
+requests
