@@ -151,10 +151,9 @@ def do_collision_search(lut):
 	workers = [Process(target=trail_worker, args=(q, lut)) for _ in range(NUM_WORKERS)]
 	for w in workers: w.start() # start the workers
 
-	with tqdm(smoothing=0.1, unit_scale=1, unit="plc") as pbar:
+	with tqdm(smoothing=0.05, unit_scale=1, unit="plc") as pbar:
 		total_iters = 0
 		expected_iterations_for_p90 = math.sqrt(math.log(1 - 0.90) * -((2.0**HASH_LENGTH_BITS)*2.0))
-		start_time = time.time()
 		while True:
 			start, end, trail_length = q.get()
 			# TODO: ignore if trail_length is too small?
@@ -169,8 +168,7 @@ def do_collision_search(lut):
 
 			# NOTE: can go negative!
 			p90_remaining_iters = expected_iterations_for_p90 - total_iters
-			avg_rate = total_iters / (time.time() - start_time)
-			p90_eta = p90_remaining_iters / avg_rate
+			p90_eta = p90_remaining_iters / (pbar.format_dict.get("rate") or 0.1)
 
 			pbar.set_postfix_str(f"prob {success_probability_now*100:.2f}%, p90 progress {p90_progress*100:.2f}% ({'-' if p90_eta < 0 else ''}{tqdm.format_interval(abs(p90_eta))} until p90)", refresh=False)
 			pbar.update(trail_length)
