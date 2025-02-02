@@ -156,7 +156,10 @@ def do_collision_search(lut):
 		expected_iterations_for_p90 = math.sqrt(math.log(1 - 0.90) * -((2.0**HASH_LENGTH_BITS)*2.0))
 		while True:
 			start, end, trail_length = q.get()
-			# TODO: ignore if trail_length is too small?
+			if trail_length == 0:  # should be very unlikely but could break things if it happens
+				continue
+
+			# update the progress stats:
 			total_iters += trail_length
 
 			# https://en.wikipedia.org/wiki/Birthday_problem#Approximations
@@ -173,6 +176,7 @@ def do_collision_search(lut):
 			pbar.set_postfix_str(f"prob {success_probability_now*100:.2f}%, p90 progress {p90_progress*100:.2f}% ({'-' if p90_eta < 0 else ''}{tqdm.format_interval(abs(p90_eta))} until p90)", refresh=False)
 			pbar.update(trail_length)
 
+			# actually check for a collision
 			if end in lookup:
 				h_a, h_b = find_collision_point(start, lookup[end])
 				if h_a[0] == h_b[0]:
