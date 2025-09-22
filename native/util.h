@@ -112,7 +112,7 @@ static void bytes_to_b32_multibase(uint8_t *resbuf, const uint8_t *data, size_t 
 	}
 }
 
-double get_current_timestamp() {
+double get_current_timestamp(void) {
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	return ts.tv_sec + ts.tv_nsec / 1e9;
