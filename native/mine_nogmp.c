@@ -31,19 +31,20 @@ void print_stats(void)
 	double rate = (double)total_plcs/1e6/duration;
 	fprintf(
 		stderr,
-		"  Stats: %'lu PLCs checked in %.3lf seconds (%.1lfM/s avg) Found: %lu\r",
+		"	Stats: %'lu PLCs checked in %.3lf seconds (%.1lfM/s avg) Found: %lu\r",
 		total_plcs, duration, rate, total_found
 	);
 	pthread_mutex_unlock(&stats_mutex);
 }
 
 struct work_args {
+	size_t num_prefixes;
 	size_t num_precomputed_rows;
 	char *pubkey;
 	uint64_t range_start;
 	uint64_t range_end;
-	char *prefix;
-	uint8_t firstbyte;
+	char **prefixes;
+	uint8_t *firstbytes;
 };
 
 void *do_work(void *ptr)
@@ -58,7 +59,10 @@ void *do_work(void *ptr)
 
 	memcpy(&signed_op[169], args->pubkey, strlen(args->pubkey));
 
-	size_t prefixlen = strlen(args->prefix);
+	size_t prefixlen[args->num_prefixes];
+	for (size_t i = 0; i < args->num_prefixes; i++) {
+		prefixlen[i] = strlen(args->prefixes[i]);
+	}
 
 	//printf("%lu %lu\n", args->range_start, args->range_end);
 	for (uint64_t i=args->range_start; i<args->range_end; i++) {
@@ -91,30 +95,32 @@ void *do_work(void *ptr)
 			SHA256_Update(&sha256, signed_op, sizeof(signed_op)-1);
 			SHA256_Final(hash, &sha256);
 
-			if (hash[0] == args->firstbyte) {
-				unsigned char did[24+1];
-				bytes_to_b32_multibase(did, hash, 5); // generates 8 bytes of base32
-				if (strncmp((char*)did, args->prefix, prefixlen) == 0) {
-					// defer the full b32 until now because it's kinda slow
-					bytes_to_b32_multibase(did, hash, 15);
-					did[24] = 0;
+			for (size_t i = 0; i < args->num_prefixes; i++) {
+				if (hash[0] == args->firstbytes[i]) {
+					unsigned char did[24+1];
+					bytes_to_b32_multibase(did, hash, 5); // generates 8 bytes of base32
+					if (strncmp((char*)did, args->prefixes[i], prefixlen[i]) == 0) {
+						// defer the full b32 until now because it's kinda slow
+						bytes_to_b32_multibase(did, hash, 15);
+						did[24] = 0;
 
-					pthread_mutex_lock(&stats_mutex);
-					total_found++;
-					pthread_mutex_unlock(&stats_mutex);
+						pthread_mutex_lock(&stats_mutex);
+						total_found++;
+						pthread_mutex_unlock(&stats_mutex);
 
 
-					pthread_mutex_lock(&stdout_mutex);
+						pthread_mutex_lock(&stdout_mutex);
 
-					printf("%s %s 0x", did, handle);
-					for (int k=0; k<32; k++) {
-						printf("%02x", precomputed[j][2][k]); // k_inv
+						printf("%s %s 0x", did, handle);
+						for (int k=0; k<32; k++) {
+							printf("%02x", precomputed[j][2][k]); // k_inv
+						}
+						printf("\n");
+						fflush(stdout);
+						print_stats(); // redraw stats line
+
+						pthread_mutex_unlock(&stdout_mutex);
 					}
-					printf("\n");
-					fflush(stdout);
-					print_stats(); // redraw stats line
-
-					pthread_mutex_unlock(&stdout_mutex);
 				}
 			}
 		}
@@ -140,27 +146,31 @@ void *stats_loop(void *ptr)
 
 int main(int argc, char *argv[])
 {
-	if (argc != 5) {
-		printf("USAGE: %s num_threads precomputed.bin did:key:publickey prefix\n", argv[0]);
+	if (argc < 5) {
+		printf("USAGE: %s num_threads precomputed.bin did:key:publickey prefixes...\n", argv[0]);
 		return -1;
 	}
 
 	int num_threads = atoi(argv[1]);
 	char *precomputed_path = argv[2];
 	char *did_pubkey = argv[3];
-	char *prefix_str = argv[4];
+	int num_prefixes = argc - 4;
+	char **prefix_list = &argv[4];
 
 	if (strlen(did_pubkey) != 57) {
 		printf("invalid pubkey length (you need the did:key: prefix)\n");
 		return -1;
 	}
-	if (strlen(prefix_str) < 2) {
-		printf("prefix should be at least 2 chars long...\n");
-		return -1;
-	}
-	if (strlen(prefix_str) > 8) {
-		printf("prefixes longer than 8 chars are not currently supported. Use grep to filter the output?\n");
-		return -1;
+
+	for (int i = 0; i < num_prefixes; i++) {
+		if (strlen(prefix_list[i]) < 2) {
+			printf("prefix[%d] should be at least 2 chars long...\n", i);
+			return -1;
+		}
+		if (strlen(prefix_list[i]) > 8) {
+			printf("prefixes longer than 8 chars are not currently supported. Use grep to filter the output?\n");
+			return -1;
+		}
 	}
 
 	/* load the precomputed data */
@@ -185,9 +195,13 @@ int main(int argc, char *argv[])
 	}
 
 	/* figure out the first byte that the prefix corresponds to */
-	uint8_t firstbyte = \
-		((strchr((char*)B32_CHARSET, prefix_str[0])-(char*)B32_CHARSET) << 3) |
-		((strchr((char*)B32_CHARSET, prefix_str[1])-(char*)B32_CHARSET) >> 2);
+
+	uint8_t firstbytes[num_prefixes];
+	for (int i = 0; i < num_prefixes; i++) {
+		firstbytes[i] = \
+			((strchr((char*)B32_CHARSET, prefix_list[i][0])-(char*)B32_CHARSET) << 3) |
+			((strchr((char*)B32_CHARSET, prefix_list[i][1])-(char*)B32_CHARSET) >> 2);
+	}
 
 	pthread_t *threads = calloc(num_threads, sizeof(*threads));
 	struct work_args *argses = calloc(num_threads, sizeof(*argses));
@@ -207,12 +221,13 @@ int main(int argc, char *argv[])
 	uint64_t total_iters = 0x1000000000L; // run ~forever (hit ctrl+c when you're done)
 #endif
 	for (int i=0; i<num_threads; i++) {
+		argses[i].num_prefixes = num_prefixes;
 		argses[i].num_precomputed_rows = num_precomputed_rows;
 		argses[i].pubkey = argv[3];
 		argses[i].range_start = total_iters*i/num_threads;
 		argses[i].range_end = total_iters*(i+1)/num_threads;
-		argses[i].prefix = prefix_str;
-		argses[i].firstbyte = firstbyte;
+		argses[i].prefixes = prefix_list;
+		argses[i].firstbytes = firstbytes;
 		pthread_create(&threads[i], NULL, *do_work, &argses[i]);
 	}
 
