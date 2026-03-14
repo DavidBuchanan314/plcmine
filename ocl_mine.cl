@@ -3,9 +3,13 @@
 // SHA-256 adapted from birthday-party/sha256.cl
 
 // Compile-time options (passed via -D):
-//   STEPS_PER_TASK   - precomputed table rows each thread processes per call
-//   MAX_RESULTS      - max result slots per call
-//   NUM_PREFIXES     - number of target prefixes (must match host)
+//   STEPS_PER_TASK        - precomputed table rows each thread processes per call
+//   MAX_RESULTS           - max result slots per call
+//   PRESIGNED_LEN         - byte length of presigned template
+//   SIGNED_LEN            - byte length of signed template
+//   PRESIGNED_HANDLE_OFF  - byte offset of 6-char handle in presigned_tpl
+//   SIGNED_SIG_OFF        - byte offset of 86-char sig in signed_tpl
+//   SIGNED_HANDLE_OFF     - byte offset of 6-char handle in signed_tpl
 
 #ifndef STEPS_PER_TASK
 #define STEPS_PER_TASK 512
@@ -306,10 +310,6 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 // handle_base:   first handle index for this kernel call
 // row_base:      first table row for this kernel call
 // num_rows:      total rows in table
-// presigned_len, signed_len: byte lengths of templates
-// presigned_handle_off: byte offset of 6-char handle in presigned_tpl
-// signed_sig_off:       byte offset of 86-char sig in signed_tpl
-// signed_handle_off:    byte offset of 6-char handle in signed_tpl
 // ---------------------------------------------------------------------------
 __kernel void mine_plc(
     __constant uint8_t  *presigned_tpl,
@@ -325,11 +325,6 @@ __kernel void mine_plc(
     const uint32_t handle_base,
     const uint32_t row_base,
     const uint32_t num_rows,
-    const uint32_t presigned_len,
-    const uint32_t signed_len,
-    const uint32_t presigned_handle_off,
-    const uint32_t signed_sig_off,
-    const uint32_t signed_handle_off,
     const uint32_t num_prefixes
 )
 {
@@ -344,12 +339,12 @@ __kernel void mine_plc(
     }
 
     // Build presigned with this handle and SHA256 it to get z
-    uint8_t presigned[160];
-    for (uint i=0;i<presigned_len;i++) presigned[i]=presigned_tpl[i];
-    for (int j=0;j<6;j++) presigned[presigned_handle_off+j]=handle[j];
+    uint8_t presigned[PRESIGNED_LEN];
+    for (uint i=0;i<PRESIGNED_LEN;i++) presigned[i]=presigned_tpl[i];
+    for (int j=0;j<6;j++) presigned[PRESIGNED_HANDLE_OFF+j]=handle[j];
 
     uint32_t z_state[8];
-    sha256_buf(presigned, presigned_len, z_state);
+    sha256_buf(presigned, PRESIGNED_LEN, z_state);
 
     uint8_t z_bytes[32];
     for (int w=0;w<8;w++){
@@ -360,9 +355,9 @@ __kernel void mine_plc(
     bigint_unpack(z, z_bytes);
 
     // Build signed_op base (handle filled, sig slot will be overwritten per row)
-    uint8_t signed_op[256];
-    for (uint i=0;i<signed_len;i++) signed_op[i]=signed_tpl[i];
-    for (int j=0;j<6;j++) signed_op[signed_handle_off+j]=handle[j];
+    uint8_t signed_op[SIGNED_LEN];
+    for (uint i=0;i<SIGNED_LEN;i++) signed_op[i]=signed_tpl[i];
+    for (int j=0;j<6;j++) signed_op[SIGNED_HANDLE_OFF+j]=handle[j];
 
     uint32_t row_end = row_base + STEPS_PER_TASK;
     if (row_end > num_rows) row_end = num_rows;
@@ -390,12 +385,12 @@ __kernel void mine_plc(
         //   [signed_sig_off .. +40): precomputed r_b64 prefix (first 30 bytes of r, base64-encoded)
         //   [signed_sig_off+40 .. +86): base64url of r_bytes[30..31] || s_bytes[0..31]
         uint rb64 = row * 40;
-        for (int b=0;b<40;b++) signed_op[signed_sig_off+b]=r_b64_tbl[rb64+b];
-        b64_raw_sig(&signed_op[signed_sig_off+40], table[tbl+30], table[tbl+31], s_bytes);
+        for (int b=0;b<40;b++) signed_op[SIGNED_SIG_OFF+b]=r_b64_tbl[rb64+b];
+        b64_raw_sig(&signed_op[SIGNED_SIG_OFF+40], table[tbl+30], table[tbl+31], s_bytes);
 
         // DID hash = SHA256(signed_op)
         uint32_t did_state[8];
-        sha256_buf(signed_op, signed_len, did_state);
+        sha256_buf(signed_op, SIGNED_LEN, did_state);
 
         // Quick first-byte filter
         uint8_t b0=(did_state[0]>>24)&0xFF;

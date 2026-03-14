@@ -196,7 +196,11 @@ class PLCMiner:
         srcdir = os.path.dirname(os.path.realpath(__file__))
         with open(os.path.join(srcdir, "ocl_mine.cl")) as f:
             src = f.read()
-        opts = f"-DSTEPS_PER_TASK={steps_per_task} -DMAX_RESULTS={MAX_RESULTS}"
+        opts = (f"-DSTEPS_PER_TASK={steps_per_task} -DMAX_RESULTS={MAX_RESULTS}"
+                f" -DPRESIGNED_LEN={PRESIGNED_LEN} -DSIGNED_LEN={SIGNED_LEN}"
+                f" -DPRESIGNED_HANDLE_OFF={PRESIGNED_HANDLE_OFF}"
+                f" -DSIGNED_SIG_OFF={SIGNED_SIG_OFF}"
+                f" -DSIGNED_HANDLE_OFF={SIGNED_HANDLE_OFF}")
         prg = cl.Program(ctx, src).build(options=opts)
         self.kernel = cl.Kernel(prg, "mine_plc")
 
@@ -222,11 +226,6 @@ class PLCMiner:
             np.uint32(handle_base),
             np.uint32(row_base),
             np.uint32(self.num_rows),
-            np.uint32(PRESIGNED_LEN),
-            np.uint32(SIGNED_LEN),
-            np.uint32(PRESIGNED_HANDLE_OFF),
-            np.uint32(SIGNED_SIG_OFF),
-            np.uint32(SIGNED_HANDLE_OFF),
             np.uint32(self.num_prefixes),
         ]
         self.kernel(self.queue, (self.work_size,), None, *args)
