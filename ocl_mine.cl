@@ -139,7 +139,6 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10],
 {
     uint64_t t[21]; for (int i=0;i<21;i++) t[i]=0;
 
-    #pragma unroll
     for (int i=0;i<10;i++)
         #pragma unroll
         for (int j=0;j<10;j++)
@@ -151,7 +150,6 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10],
     #pragma unroll
     for (int i=10;i<19;i++){t[i+1]+=t[i]>>26;hi[i-10]=(uint32_t)((t[i]&MASK26)<<4);t[i]=0;}
     hi[9]=(uint32_t)(t[19]<<4);
-    #pragma unroll
     for (int i=0;i<10;i++)
         #pragma unroll
         for (int j=0;j<5;j++)
@@ -162,7 +160,6 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10],
     #pragma unroll
     for (int i=10;i<14;i++){t[i+1]+=t[i]>>26;hi[i-10]=(uint32_t)((t[i]&MASK26)<<4);t[i]=0;}
     hi[4]=(uint32_t)(t[14]<<4);
-    #pragma unroll
     for (int i=0;i<5;i++)
         #pragma unroll
         for (int j=0;j<5;j++)
