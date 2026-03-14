@@ -139,34 +139,51 @@ static void mod_fma(uint32_t res[10], const uint32_t a[10],
 {
     uint64_t t[21]; for (int i=0;i<21;i++) t[i]=0;
 
+    #pragma unroll
     for (int i=0;i<10;i++)
+        #pragma unroll
         for (int j=0;j<10;j++)
             t[i+j]+=(uint64_t)a[i]*(uint64_t)b[j];
 
     // First reduction: fold t[10..19] back via C_LIMBS
     uint32_t hi[10]; for (int i=0;i<10;i++) hi[i]=0;
     t[10]+=t[9]>>26; t[9]&=MASK26;
+    #pragma unroll
     for (int i=10;i<19;i++){t[i+1]+=t[i]>>26;hi[i-10]=(uint32_t)((t[i]&MASK26)<<4);t[i]=0;}
     hi[9]=(uint32_t)(t[19]<<4);
-    for (int i=0;i<10;i++) for (int j=0;j<5;j++) t[i+j]+=(uint64_t)hi[i]*(uint64_t)C_LIMBS[j];
+    #pragma unroll
+    for (int i=0;i<10;i++)
+        #pragma unroll
+        for (int j=0;j<5;j++)
+            t[i+j]+=(uint64_t)hi[i]*(uint64_t)C_LIMBS[j];
 
     // Second reduction
     t[10]+=t[9]>>26; t[9]&=MASK26;
+    #pragma unroll
     for (int i=10;i<14;i++){t[i+1]+=t[i]>>26;hi[i-10]=(uint32_t)((t[i]&MASK26)<<4);t[i]=0;}
     hi[4]=(uint32_t)(t[14]<<4);
-    for (int i=0;i<5;i++) for (int j=0;j<5;j++) t[i+j]+=(uint64_t)hi[i]*(uint64_t)C_LIMBS[j];
+    #pragma unroll
+    for (int i=0;i<5;i++)
+        #pragma unroll
+        for (int j=0;j<5;j++)
+            t[i+j]+=(uint64_t)hi[i]*(uint64_t)C_LIMBS[j];
 
     // Add c
+    #pragma unroll
     for (int i=0;i<10;i++) t[i]+=c[i];
 
     // Carry
+    #pragma unroll
     for (int i=0;i<10;i++){t[i+1]+=t[i]>>26;t[i]&=MASK26;}
 
     // Final reduction
     uint32_t ov=(uint32_t)((t[9]>>22)+(t[10]<<4));
+    #pragma unroll
     for (int j=0;j<5;j++) t[j]+=(uint64_t)ov*(uint64_t)C_LIMBS[j];
+    #pragma unroll
     for (int i=0;i<10;i++){t[i+1]+=t[i]>>26;t[i]&=MASK26;}
 
+    #pragma unroll
     for (int i=0;i<10;i++) res[i]=(uint32_t)t[i];
 
     // Low-s: if top bit (bit 21 of limb 9) set, res = n - res
