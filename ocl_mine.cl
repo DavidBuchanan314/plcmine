@@ -264,6 +264,112 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 }
 
 // ---------------------------------------------------------------------------
+// SHA-256 of signed_op (247 bytes = 4 blocks), built block-by-block without
+// a signed_op[256] buffer to avoid private-memory register pressure.
+//
+// signed_op layout:
+//   bytes   0-6:   constant CBOR header  (\xa7csigxV)
+//   bytes   7-46:  rb[0..39]             (r_b64, 40 chars)
+//   bytes  47-92:  bs[0..45]             (b64_sig, 46 chars)
+//   bytes  93-127: constant CBOR mid     (from signed_tpl)
+//   bytes 128-191: constant CBOR body    (from signed_tpl, handle at 147-152)
+//   bytes 192-246: constant CBOR tail    (from signed_tpl)
+// ---------------------------------------------------------------------------
+#define PACK4(a,b,c,d) (((uint32_t)(a)<<24)|((uint32_t)(b)<<16)|((uint32_t)(c)<<8)|(uint32_t)(d))
+
+static void sha256_signed_op(
+    uint32_t out[8],
+    __constant uint8_t *stpl,   // signed_tpl in __constant
+    const uint8_t *rb,          // r_b64[40]
+    const uint8_t *bs,          // b64_sig[46]
+    const uint8_t *handle       // handle[6]
+)
+{
+    uint32_t state[8];
+    for (int i=0;i<8;i++) state[i]=SHA256_INIT[i];
+    uint32_t blk[16];
+
+    // Block 0: stpl[0..6] + rb[0..39] + bs[0..16]
+    blk[0]  = PACK4(stpl[0],  stpl[1],  stpl[2],  stpl[3]);   // \xa7csig
+    blk[1]  = PACK4(stpl[4],  stpl[5],  stpl[6],  rb[0]);     // gxV + rb[0]
+    blk[2]  = PACK4(rb[1],  rb[2],  rb[3],  rb[4]);
+    blk[3]  = PACK4(rb[5],  rb[6],  rb[7],  rb[8]);
+    blk[4]  = PACK4(rb[9],  rb[10], rb[11], rb[12]);
+    blk[5]  = PACK4(rb[13], rb[14], rb[15], rb[16]);
+    blk[6]  = PACK4(rb[17], rb[18], rb[19], rb[20]);
+    blk[7]  = PACK4(rb[21], rb[22], rb[23], rb[24]);
+    blk[8]  = PACK4(rb[25], rb[26], rb[27], rb[28]);
+    blk[9]  = PACK4(rb[29], rb[30], rb[31], rb[32]);
+    blk[10] = PACK4(rb[33], rb[34], rb[35], rb[36]);
+    blk[11] = PACK4(rb[37], rb[38], rb[39], bs[0]);
+    blk[12] = PACK4(bs[1],  bs[2],  bs[3],  bs[4]);
+    blk[13] = PACK4(bs[5],  bs[6],  bs[7],  bs[8]);
+    blk[14] = PACK4(bs[9],  bs[10], bs[11], bs[12]);
+    blk[15] = PACK4(bs[13], bs[14], bs[15], bs[16]);
+    sha256_compress(state, blk);
+
+    // Block 1: bs[17..45] + stpl[93..127]
+    blk[0]  = PACK4(bs[17], bs[18], bs[19], bs[20]);
+    blk[1]  = PACK4(bs[21], bs[22], bs[23], bs[24]);
+    blk[2]  = PACK4(bs[25], bs[26], bs[27], bs[28]);
+    blk[3]  = PACK4(bs[29], bs[30], bs[31], bs[32]);
+    blk[4]  = PACK4(bs[33], bs[34], bs[35], bs[36]);
+    blk[5]  = PACK4(bs[37], bs[38], bs[39], bs[40]);
+    blk[6]  = PACK4(bs[41], bs[42], bs[43], bs[44]);
+    blk[7]  = PACK4(bs[45], stpl[93],  stpl[94],  stpl[95]);
+    blk[8]  = PACK4(stpl[96],  stpl[97],  stpl[98],  stpl[99]);
+    blk[9]  = PACK4(stpl[100], stpl[101], stpl[102], stpl[103]);
+    blk[10] = PACK4(stpl[104], stpl[105], stpl[106], stpl[107]);
+    blk[11] = PACK4(stpl[108], stpl[109], stpl[110], stpl[111]);
+    blk[12] = PACK4(stpl[112], stpl[113], stpl[114], stpl[115]);
+    blk[13] = PACK4(stpl[116], stpl[117], stpl[118], stpl[119]);
+    blk[14] = PACK4(stpl[120], stpl[121], stpl[122], stpl[123]);
+    blk[15] = PACK4(stpl[124], stpl[125], stpl[126], stpl[127]);
+    sha256_compress(state, blk);
+
+    // Block 2: stpl[128..146] + handle[0..5] + stpl[153..191]
+    // handle is at signed_op bytes 147-152 (block-local offset 19-24)
+    blk[0]  = PACK4(stpl[128], stpl[129], stpl[130], stpl[131]);
+    blk[1]  = PACK4(stpl[132], stpl[133], stpl[134], stpl[135]);
+    blk[2]  = PACK4(stpl[136], stpl[137], stpl[138], stpl[139]);
+    blk[3]  = PACK4(stpl[140], stpl[141], stpl[142], stpl[143]);
+    blk[4]  = PACK4(stpl[144], stpl[145], stpl[146], handle[0]);
+    blk[5]  = PACK4(handle[1], handle[2], handle[3], handle[4]);
+    blk[6]  = PACK4(handle[5], stpl[153], stpl[154], stpl[155]);
+    blk[7]  = PACK4(stpl[156], stpl[157], stpl[158], stpl[159]);
+    blk[8]  = PACK4(stpl[160], stpl[161], stpl[162], stpl[163]);
+    blk[9]  = PACK4(stpl[164], stpl[165], stpl[166], stpl[167]);
+    blk[10] = PACK4(stpl[168], stpl[169], stpl[170], stpl[171]);
+    blk[11] = PACK4(stpl[172], stpl[173], stpl[174], stpl[175]);
+    blk[12] = PACK4(stpl[176], stpl[177], stpl[178], stpl[179]);
+    blk[13] = PACK4(stpl[180], stpl[181], stpl[182], stpl[183]);
+    blk[14] = PACK4(stpl[184], stpl[185], stpl[186], stpl[187]);
+    blk[15] = PACK4(stpl[188], stpl[189], stpl[190], stpl[191]);
+    sha256_compress(state, blk);
+
+    // Block 3: stpl[192..246] + 0x80 padding + length (1976 bits)
+    blk[0]  = PACK4(stpl[192], stpl[193], stpl[194], stpl[195]);
+    blk[1]  = PACK4(stpl[196], stpl[197], stpl[198], stpl[199]);
+    blk[2]  = PACK4(stpl[200], stpl[201], stpl[202], stpl[203]);
+    blk[3]  = PACK4(stpl[204], stpl[205], stpl[206], stpl[207]);
+    blk[4]  = PACK4(stpl[208], stpl[209], stpl[210], stpl[211]);
+    blk[5]  = PACK4(stpl[212], stpl[213], stpl[214], stpl[215]);
+    blk[6]  = PACK4(stpl[216], stpl[217], stpl[218], stpl[219]);
+    blk[7]  = PACK4(stpl[220], stpl[221], stpl[222], stpl[223]);
+    blk[8]  = PACK4(stpl[224], stpl[225], stpl[226], stpl[227]);
+    blk[9]  = PACK4(stpl[228], stpl[229], stpl[230], stpl[231]);
+    blk[10] = PACK4(stpl[232], stpl[233], stpl[234], stpl[235]);
+    blk[11] = PACK4(stpl[236], stpl[237], stpl[238], stpl[239]);
+    blk[12] = PACK4(stpl[240], stpl[241], stpl[242], stpl[243]);
+    blk[13] = PACK4(stpl[244], stpl[245], stpl[246], 0x80);
+    blk[14] = 0;
+    blk[15] = 247*8;  // 1976 bits
+    sha256_compress(state, blk);
+
+    for (int i=0;i<8;i++) out[i]=state[i];
+}
+
+// ---------------------------------------------------------------------------
 // Main mining kernel
 //
 // Each work item (gid) handles one handle tweak index (handle_base + gid),
@@ -282,10 +388,8 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 // handle_base:   first handle index for this kernel call
 // row_base:      first table row for this kernel call
 // num_rows:      total rows in table
-// presigned_len, signed_len: byte lengths of templates
+// presigned_len:        byte length of presigned_tpl
 // presigned_handle_off: byte offset of 6-char handle in presigned_tpl
-// signed_sig_off:       byte offset of 86-char sig in signed_tpl
-// signed_handle_off:    byte offset of 6-char handle in signed_tpl
 // ---------------------------------------------------------------------------
 __kernel void mine_plc(
     __constant uint8_t  *presigned_tpl,
@@ -302,10 +406,7 @@ __kernel void mine_plc(
     const uint32_t row_base,
     const uint32_t num_rows,
     const uint32_t presigned_len,
-    const uint32_t signed_len,
     const uint32_t presigned_handle_off,
-    const uint32_t signed_sig_off,
-    const uint32_t signed_handle_off,
     const uint32_t num_prefixes
 )
 {
@@ -335,11 +436,6 @@ __kernel void mine_plc(
     uint32_t z[10];
     bigint_unpack(z, z_bytes);
 
-    // Build signed_op base (handle filled, sig slot will be overwritten per row)
-    uint8_t signed_op[256];
-    for (uint i=0;i<signed_len;i++) signed_op[i]=signed_tpl[i];
-    for (int j=0;j<6;j++) signed_op[signed_handle_off+j]=handle[j];
-
     uint32_t row_end = row_base + STEPS_PER_TASK;
     if (row_end > num_rows) row_end = num_rows;
 
@@ -367,16 +463,18 @@ __kernel void mine_plc(
         raw_sig[0]=table[tbl+30]; raw_sig[1]=table[tbl+31];
         for (int b=0;b<32;b++) raw_sig[2+b]=s_bytes[b];
 
-        // Fill sig into signed_op:
-        //   [signed_sig_off .. +40): precomputed r_b64 prefix (first 30 bytes of r, base64-encoded)
-        //   [signed_sig_off+40 .. +86): base64 of raw_sig (34 bytes -> 46 chars)
+        // r_b64[40] = precomputed base64 of r_bytes[0..29]
+        uint8_t rb[40];
         uint rb64 = row * 40;
-        for (int b=0;b<40;b++) signed_op[signed_sig_off+b]=r_b64_tbl[rb64+b];
-        b64_encode(&signed_op[signed_sig_off+40], raw_sig, 34);
+        for (int b=0;b<40;b++) rb[b]=r_b64_tbl[rb64+b];
 
-        // DID hash = SHA256(signed_op)
+        // b64_sig[46] = base64url_nopad(raw_sig[34])
+        uint8_t b64_sig[46];
+        b64_encode(b64_sig, raw_sig, 34);
+
+        // DID hash = SHA256(signed_op), built block-by-block without a buffer
         uint32_t did_state[8];
-        sha256_buf(signed_op, signed_len, did_state);
+        sha256_signed_op(did_state, signed_tpl, rb, b64_sig, handle);
 
         // Quick first-byte filter
         uint8_t b0=(did_state[0]>>24)&0xFF;

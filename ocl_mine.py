@@ -43,8 +43,6 @@ PRESIGNED_HANDLE_OFF = 55
 PRESIGNED_PUBKEY_OFF = 77
 PRESIGNED_LEN = 155
 
-SIGNED_SIG_OFF    = 7
-SIGNED_HANDLE_OFF = 147
 SIGNED_PUBKEY_OFF = 169
 SIGNED_LEN = 247   # sizeof(signed_op)-1 in mine_nogmp.c
 
@@ -223,10 +221,7 @@ class PLCMiner:
             np.uint32(row_base),
             np.uint32(self.num_rows),
             np.uint32(PRESIGNED_LEN),
-            np.uint32(SIGNED_LEN),
             np.uint32(PRESIGNED_HANDLE_OFF),
-            np.uint32(SIGNED_SIG_OFF),
-            np.uint32(SIGNED_HANDLE_OFF),
             np.uint32(self.num_prefixes),
         ]
         self.kernel(self.queue, (self.work_size,), None, *args)
