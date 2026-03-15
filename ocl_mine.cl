@@ -311,8 +311,8 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 // Each work item (gid) handles one handle tweak index (handle_base + gid),
 // and processes table rows [row_base, row_base+STEPS_PER_TASK).
 //
-// presigned_tpl: the unsigned genesis op with pubkey filled, handle=placeholder
-// signed_tpl:    the signed genesis op with pubkey filled, sig=placeholder, handle=placeholder
+// PRESIGNED_TPL: compile-time constant, unsigned genesis op with pubkey filled, handle=placeholder
+// SIGNED_TPL:    compile-time constant, signed genesis op with sig=placeholder, handle=placeholder
 // limb_table:    [num_rows][20] uint32 = k_inv_rDa(10) || k_inv(10), pre-unpacked 26-bit limbs
 // r_b64_tbl:     [num_rows][40]   = first 30 bytes of r base64-encoded (40 chars per row)
 // r_tail:        [num_rows][2]    = r_bytes[30..31] per row
@@ -327,8 +327,6 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 // num_rows:      total rows in table
 // ---------------------------------------------------------------------------
 __kernel void mine_plc(
-    __constant uint8_t  *presigned_tpl,
-    __constant uint8_t  *signed_tpl,
     __global   uint32_t *limb_table,
     __global   uint8_t  *r_b64_tbl,
     __global   uint8_t  *r_tail,
@@ -356,7 +354,7 @@ __kernel void mine_plc(
 
     // Build presigned with this handle and SHA256 it to get z
     uint8_t presigned[PRESIGNED_LEN];
-    for (uint i=0;i<PRESIGNED_LEN;i++) presigned[i]=presigned_tpl[i];
+    for (uint i=0;i<PRESIGNED_LEN;i++) presigned[i]=PRESIGNED_TPL[i];
     for (int j=0;j<6;j++) presigned[PRESIGNED_HANDLE_OFF+j]=handle[j];
 
     uint32_t z_state[8];
@@ -372,7 +370,7 @@ __kernel void mine_plc(
 
     // Build signed_op base (handle filled, sig slot will be overwritten per row)
     uint8_t signed_op[SIGNED_LEN];
-    for (uint i=0;i<SIGNED_LEN;i++) signed_op[i]=signed_tpl[i];
+    for (uint i=0;i<SIGNED_LEN;i++) signed_op[i]=SIGNED_TPL[i];
     for (int j=0;j<6;j++) signed_op[SIGNED_HANDLE_OFF+j]=handle[j];
 
     uint32_t row_end = row_base + STEPS_PER_TASK;

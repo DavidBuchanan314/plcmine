@@ -205,12 +205,6 @@ class PLCMiner:
         self.r_b64_buf      = cl.Buffer(ctx, RO, hostbuf=r_b64_tbl)
         self.r_tail_buf     = cl.Buffer(ctx, RO, hostbuf=r_tail)
 
-        # Small constant buffers
-        presigned_np = np.frombuffer(presigned_tpl, dtype=np.uint8)
-        signed_np    = np.frombuffer(signed_tpl,    dtype=np.uint8)
-        self.presigned_buf = cl.Buffer(ctx, RO, hostbuf=presigned_np)
-        self.signed_buf    = cl.Buffer(ctx, RO, hostbuf=signed_np)
-
         firstbytes, prefix_data, prefix_lens, prefix_offsets = build_prefix_buffers(prefixes)
         self.firstbytes_buf    = cl.Buffer(ctx, RO, hostbuf=firstbytes)
         self.prefix_data_buf   = cl.Buffer(ctx, RO, hostbuf=prefix_data)
@@ -223,10 +217,19 @@ class PLCMiner:
         self.results_buf     = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.results.nbytes)
         self.result_count_buf= cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.result_count.nbytes)
 
-        # Compile kernel
+        # Compile kernel with templates baked in
         srcdir = os.path.dirname(os.path.realpath(__file__))
         with open(os.path.join(srcdir, "ocl_mine.cl")) as f:
             src = f.read()
+
+        def bytes_to_cl_array(name: str, data: bytes) -> str:
+            elems = ",".join(str(b) for b in data)
+            return f"constant uchar {name}[{len(data)}] = {{{elems}}};\n"
+
+        preamble = bytes_to_cl_array("PRESIGNED_TPL", presigned_tpl)
+        preamble += bytes_to_cl_array("SIGNED_TPL", signed_tpl)
+        src = preamble + src
+
         opts = (f"-DSTEPS_PER_TASK={steps_per_task} -DMAX_RESULTS={MAX_RESULTS}"
                 f" -DPRESIGNED_LEN={PRESIGNED_LEN} -DSIGNED_LEN={SIGNED_LEN}"
                 f" -DPRESIGNED_HANDLE_OFF={PRESIGNED_HANDLE_OFF}"
@@ -244,8 +247,6 @@ class PLCMiner:
         cl.enqueue_copy(self.queue, self.result_count_buf, self.result_count)
 
         args = [
-            self.presigned_buf,
-            self.signed_buf,
             self.limb_table_buf,
             self.r_b64_buf,
             self.r_tail_buf,
