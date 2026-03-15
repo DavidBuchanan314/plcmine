@@ -21,7 +21,7 @@ import pyopencl as cl
 # ---------------------------------------------------------------------------
 # Constants matching the kernel and mine_nogmp.c
 # ---------------------------------------------------------------------------
-WORK_SIZE      = 0x4000   # GPU threads per call (handles per batch)
+WORK_SIZE      = 0x100000   # GPU threads per call (handles per batch)
 STEPS_PER_TASK = 512      # Table rows each thread processes per call
 MAX_RESULTS    = 64
 RESULT_STRIDE  = 68       # bytes per result slot: handle(6)+pad(2)+row(4)+k_inv(32)+did_b32(24)
@@ -120,19 +120,49 @@ def build_prefix_buffers(prefixes: list[str]):
 # Precomputed table helpers
 # ---------------------------------------------------------------------------
 
+MASK26 = 0x03FFFFFF
+
+def bigint_unpack(buf: bytes) -> list[int]:
+    """Unpack 32 big-endian bytes into 10x26-bit limbs (LSB-first). Matches ocl_mine.cl."""
+    r = [0] * 10
+    r[0] = buf[31] | (buf[30]<<8) | (buf[29]<<16) | ((buf[28]&0x03)<<24); r[0] &= MASK26
+    r[1] = (buf[28]>>2) | (buf[27]<<6) | (buf[26]<<14) | ((buf[25]&0x0F)<<22); r[1] &= MASK26
+    r[2] = (buf[25]>>4) | (buf[24]<<4) | (buf[23]<<12) | ((buf[22]&0x3F)<<20); r[2] &= MASK26
+    r[3] = (buf[22]>>6) | (buf[21]<<2) | (buf[20]<<10) | (buf[19]<<18); r[3] &= MASK26
+    r[4] = buf[18] | (buf[17]<<8) | (buf[16]<<16) | ((buf[15]&0x03)<<24); r[4] &= MASK26
+    r[5] = (buf[15]>>2) | (buf[14]<<6) | (buf[13]<<14) | ((buf[12]&0x0F)<<22); r[5] &= MASK26
+    r[6] = (buf[12]>>4) | (buf[11]<<4) | (buf[10]<<12) | ((buf[9]&0x3F)<<20); r[6] &= MASK26
+    r[7] = (buf[9]>>6) | (buf[8]<<2) | (buf[7]<<10) | (buf[6]<<18); r[7] &= MASK26
+    r[8] = buf[5] | (buf[4]<<8) | (buf[3]<<16) | ((buf[2]&0x03)<<24); r[8] &= MASK26
+    r[9] = (buf[2]>>2) | (buf[1]<<6) | (buf[0]<<14); r[9] &= 0x003FFFFF
+    return r
+
+
 def load_precomputed(path: str):
     """
-    Load precomputed.bin -> (table_bytes, r_b64_table_bytes, num_rows).
+    Load precomputed.bin -> (limb_table, r_b64_table, r_tail, num_rows).
 
-    table_bytes layout: [num_rows * 96] = r(32) || k_inv_rDa(32) || k_inv(32) per row.
-    r_b64_table_bytes:  [num_rows * 40] = base64(r[0:30]) per row.
+    limb_table: [num_rows * 20] uint32 = k_inv_rDa(10 limbs) || k_inv(10 limbs) per row.
+    r_b64_table: [num_rows * 40] uint8 = base64(r[0:30]) per row.
+    r_tail:      [num_rows * 2] uint8 = r_bytes[30..31] per row.
     """
     with open(path, "rb") as f:
         raw = f.read()
     row_size = 96  # 3 * 32
     assert len(raw) % row_size == 0
     num_rows = len(raw) // row_size
-    table = np.frombuffer(raw, dtype=np.uint8).copy()
+
+    # Pre-unpack k_inv_rDa and k_inv into 26-bit limbs
+    limb_table = np.zeros(num_rows * 20, dtype=np.uint32)
+    r_tail = np.zeros(num_rows * 2, dtype=np.uint8)
+    for i in range(num_rows):
+        base = i * 96
+        k_inv_rDa_bytes = raw[base+32 : base+64]
+        k_inv_bytes     = raw[base+64 : base+96]
+        limb_table[i*20 : i*20+10] = bigint_unpack(k_inv_rDa_bytes)
+        limb_table[i*20+10 : i*20+20] = bigint_unpack(k_inv_bytes)
+        r_tail[i*2]   = raw[base+30]
+        r_tail[i*2+1] = raw[base+31]
 
     # Precompute r_b64: for each row, base64-encode r_bytes[0:30]
     import base64
@@ -145,7 +175,7 @@ def load_precomputed(path: str):
         r_b64[i*40 : (i+1)*40] = enc
 
     r_b64_arr = np.frombuffer(r_b64, dtype=np.uint8).copy()
-    return table, r_b64_arr, num_rows
+    return limb_table, r_b64_arr, r_tail, num_rows
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +183,8 @@ def load_precomputed(path: str):
 # ---------------------------------------------------------------------------
 
 class PLCMiner:
-    def __init__(self, table: np.ndarray, r_b64_tbl: np.ndarray, num_rows: int,
+    def __init__(self, limb_table: np.ndarray, r_b64_tbl: np.ndarray,
+                 r_tail: np.ndarray, num_rows: int,
                  presigned_tpl: bytes, signed_tpl: bytes,
                  prefixes: list[str],
                  work_size: int = WORK_SIZE,
@@ -169,10 +200,10 @@ class PLCMiner:
 
         RO = cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR
 
-        # Large read-only buffers: table (global) and r_b64_tbl (global)
-        # These don't fit in __constant, so they stay in global memory.
-        self.table_buf    = cl.Buffer(ctx, RO, hostbuf=table)
-        self.r_b64_buf    = cl.Buffer(ctx, RO, hostbuf=r_b64_tbl)
+        # Large read-only buffers (global memory)
+        self.limb_table_buf = cl.Buffer(ctx, RO, hostbuf=limb_table)
+        self.r_b64_buf      = cl.Buffer(ctx, RO, hostbuf=r_b64_tbl)
+        self.r_tail_buf     = cl.Buffer(ctx, RO, hostbuf=r_tail)
 
         # Small constant buffers
         presigned_np = np.frombuffer(presigned_tpl, dtype=np.uint8)
@@ -215,8 +246,9 @@ class PLCMiner:
         args = [
             self.presigned_buf,
             self.signed_buf,
-            self.table_buf,
+            self.limb_table_buf,
             self.r_b64_buf,
+            self.r_tail_buf,
             self.firstbytes_buf,
             self.prefix_data_buf,
             self.prefix_lens_buf,
@@ -269,14 +301,14 @@ def run(precomputed_path: str, pubkey: str, prefixes: list[str],
             sys.exit(f"prefix '{p}' longer than 8 chars not supported (grep the output?)")
 
     print(f"Loading precomputed table from {precomputed_path}...", file=sys.stderr)
-    table, r_b64_tbl, num_rows = load_precomputed(precomputed_path)
+    limb_table, r_b64_tbl, r_tail, num_rows = load_precomputed(precomputed_path)
     print(f"Loaded {num_rows} rows.", file=sys.stderr)
 
     presigned_tpl = build_presigned_template(pubkey)
     signed_tpl    = build_signed_template(pubkey)
 
     print("Initializing OpenCL...", file=sys.stderr)
-    miner = PLCMiner(table, r_b64_tbl, num_rows, presigned_tpl, signed_tpl,
+    miner = PLCMiner(limb_table, r_b64_tbl, r_tail, num_rows, presigned_tpl, signed_tpl,
                      prefixes, work_size=work_size, steps_per_task=steps_per_task)
     print("Ready. Mining...", file=sys.stderr)
 

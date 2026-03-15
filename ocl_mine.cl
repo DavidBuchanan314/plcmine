@@ -313,8 +313,9 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 //
 // presigned_tpl: the unsigned genesis op with pubkey filled, handle=placeholder
 // signed_tpl:    the signed genesis op with pubkey filled, sig=placeholder, handle=placeholder
-// table:         [num_rows][3][32] = r_bytes || k_inv_rDa_bytes || k_inv_bytes, row-major
+// limb_table:    [num_rows][20] uint32 = k_inv_rDa(10) || k_inv(10), pre-unpacked 26-bit limbs
 // r_b64_tbl:     [num_rows][40]   = first 30 bytes of r base64-encoded (40 chars per row)
+// r_tail:        [num_rows][2]    = r_bytes[30..31] per row
 // firstbytes:    [num_prefixes]   = expected hash[0] for each prefix (for fast pre-filter)
 // prefix_data:   flattened prefix strings (base32 chars, not null-terminated)
 // prefix_lens:   [num_prefixes] lengths
@@ -328,8 +329,9 @@ static void b32_encode(uint8_t *out, const uint8_t *data, uint len)
 __kernel void mine_plc(
     __constant uint8_t  *presigned_tpl,
     __constant uint8_t  *signed_tpl,
-    __global   uint8_t  *table,
+    __global   uint32_t *limb_table,
     __global   uint8_t  *r_b64_tbl,
+    __global   uint8_t  *r_tail,
     __constant uint8_t  *firstbytes,
     __constant uint8_t  *prefix_data,
     __constant uint32_t *prefix_lens,
@@ -377,16 +379,13 @@ __kernel void mine_plc(
     if (row_end > num_rows) row_end = num_rows;
 
     for (uint row=row_base; row<row_end; row++) {
-        // Load k_inv_rDa and k_inv from table (each row = 96 bytes: r|k_inv_rDa|k_inv)
-        uint tbl = row * 96;
-        uint8_t k_inv_rDa_bytes[32], k_inv_bytes[32];
-        for (int b=0;b<32;b++){
-            k_inv_rDa_bytes[b]=table[tbl+32+b];
-            k_inv_bytes[b]    =table[tbl+64+b];
-        }
+        // Load pre-unpacked limbs from table (each row = 20 uint32s: k_inv_rDa(10) || k_inv(10))
+        uint loff = row * 20;
         uint32_t k_inv_rDa[10], k_inv_l[10];
-        bigint_unpack(k_inv_rDa, k_inv_rDa_bytes);
-        bigint_unpack(k_inv_l,   k_inv_bytes);
+        #pragma unroll
+        for (int i=0;i<10;i++) k_inv_rDa[i] = limb_table[loff+i];
+        #pragma unroll
+        for (int i=0;i<10;i++) k_inv_l[i] = limb_table[loff+10+i];
 
         // s = (z * k_inv + k_inv_rDa) mod n  (with low-s)
         uint32_t s[10];
@@ -400,7 +399,7 @@ __kernel void mine_plc(
         //   [signed_sig_off+40 .. +86): base64url of r_bytes[30..31] || s_bytes[0..31]
         uint rb64 = row * 40;
         for (int b=0;b<40;b++) signed_op[SIGNED_SIG_OFF+b]=r_b64_tbl[rb64+b];
-        b64_raw_sig(&signed_op[SIGNED_SIG_OFF+40], table[tbl+30], table[tbl+31], s_bytes);
+        b64_raw_sig(&signed_op[SIGNED_SIG_OFF+40], r_tail[row*2], r_tail[row*2+1], s_bytes);
 
         // DID hash = SHA256(signed_op)
         uint32_t did_state[8];
@@ -434,6 +433,8 @@ __kernel void mine_plc(
                 results[roff+6]=0; results[roff+7]=0; // pad
                 results[roff+8]=(row>>24)&0xFF; results[roff+9]=(row>>16)&0xFF;
                 results[roff+10]=(row>>8)&0xFF;  results[roff+11]=row&0xFF;
+                uint8_t k_inv_bytes[32];
+                bigint_pack(k_inv_bytes, k_inv_l);
                 for (int b=0;b<32;b++) results[roff+12+b]=k_inv_bytes[b];
                 for (int b=0;b<24;b++) results[roff+44+b]=did_b32[b];
             }
